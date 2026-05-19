@@ -14,6 +14,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
 
 namespace NewScan
 {
@@ -25,6 +27,8 @@ namespace NewScan
         bool _loadingCaps;
         List<IWebSocketConnection> allSockets;
         WebSocketServer server;
+        List<byte[]> _scannedImages;
+        bool _isScanning;
         public Form1()
         {
             InitializeComponent();
@@ -47,6 +51,8 @@ namespace NewScan
 
             allSockets = new List<IWebSocketConnection>();
             server = new WebSocketServer("ws://0.0.0.0:8181");
+            _scannedImages = new List<byte[]>();
+            _isScanning = false;
             server.Start(socket =>
             {
                 socket.OnOpen = () =>
@@ -127,6 +133,8 @@ namespace NewScan
                     if (stream != null)
                     {
                         var outPut = StreamToByte(stream);
+                        // Store the scanned image for later PDF creation
+                        _scannedImages.Add(outPut);
                         foreach (var socket in allSockets.ToList())
                         {
                             socket.Send(outPut);
@@ -147,6 +155,8 @@ namespace NewScan
                     btnStopScan.Enabled = false;
                     btnStartCapture.Enabled = true;
                     LoadSourceCaps();
+                    // Scan session ended - create and send PDF
+                    CreateAndSendPdf();
                 }));
             };
             _twain.TransferReady += (s, e) =>
@@ -253,6 +263,8 @@ namespace NewScan
                 //_twain.CurrentSource.CapXferCount.Set(4);
 
                 _stopScan = false;
+                _isScanning = true;
+                _scannedImages.Clear(); // Clear previous scan images
 
                 if (_twain.CurrentSource.Capabilities.CapUIControllable.IsSupported)//.SupportedCaps.Contains(CapabilityId.CapUIControllable))
                 {
@@ -404,6 +416,69 @@ namespace NewScan
             {
                 input.CopyTo(ms);
                 return ms.ToArray();
+            }
+        }
+
+        private void CreateAndSendPdf()
+        {
+            if (_scannedImages.Count == 0)
+            {
+                _isScanning = false;
+                return;
+            }
+
+            try
+            {
+                // Create PDF in memory
+                using (MemoryStream pdfStream = new MemoryStream())
+                {
+                    Document document = new Document();
+                    PdfWriter writer = PdfWriter.GetInstance(document, pdfStream);
+                    document.Open();
+
+                    foreach (var imageData in _scannedImages)
+                    {
+                        // Convert byte array to image
+                        using (MemoryStream imgStream = new MemoryStream(imageData))
+                        {
+                            System.Drawing.Image img = System.Drawing.Image.FromStream(imgStream);
+                            
+                            // Add image to PDF
+                            iTextSharp.text.Image pdfImage = iTextSharp.text.Image.GetInstance(img, img.RawFormat);
+                            
+                            // Scale image to fit page if needed
+                            float pageSizeWidth = document.PageSize.Width - document.LeftMargin - document.RightMargin;
+                            float pageSizeHeight = document.PageSize.Height - document.TopMargin - document.BottomMargin;
+                            
+                            if (pdfImage.Width > pageSizeWidth || pdfImage.Height > pageSizeHeight)
+                            {
+                                pdfImage.ScaleToFit(pageSizeWidth, pageSizeHeight);
+                            }
+                            
+                            pdfImage.Alignment = iTextSharp.text.Image.ALIGN_CENTER;
+                            document.Add(pdfImage);
+                        }
+                    }
+
+                    document.Close();
+                    writer.Close();
+
+                    // Send PDF to all connected clients
+                    byte[] pdfBytes = pdfStream.ToArray();
+                    foreach (var socket in allSockets.ToList())
+                    {
+                        socket.Send(pdfBytes);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PlatformInfo.Current.Log.Info("PDF creation error: " + ex.Message);
+            }
+            finally
+            {
+                _scannedImages.Clear();
+                _isScanning = false;
             }
         }
 
