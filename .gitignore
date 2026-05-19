@@ -1,25 +1,43 @@
-# Build artifacts and binaries
-bin/
-obj/
+```
+# Build artifacts
+*.obj
 *.exe
 *.dll
 *.pdb
-*.xml
-*.config
-*.manifest
+*.userprefs
 *.cache
-*.resources
+*.manifest
+*.lockb
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+dist/
 
-# Temporary generated files
-**/TemporaryGeneratedFile_*.cs
+# Dependencies
+packages/
+node_modules/
+vendor/
 
-# Visual Studio files
+# Logs
+*.log
+
+# User-specific files
+.vs/
 *.user
 *.userosscache
 *.suo
-*.userprefs
-.vs/
+*.csproj.user
 
-# Debug and release builds
-**/Debug/
-**/Release/
+# Environment
+.env
+.env.local
+*.env.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
