@@ -126,7 +126,7 @@ namespace NewScan
                     break;
                 }
 
-                Image img = null;
+                System.Drawing.Image img = null;
                 if (e.NativeData != IntPtr.Zero)
                 {
                     var stream = e.GetNativeImageStream();
